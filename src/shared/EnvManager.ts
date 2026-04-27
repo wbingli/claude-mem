@@ -239,6 +239,32 @@ export function buildIsolatedEnv(includeCredentials: boolean = true): Record<str
     // sync path cannot model — copying a parent-process token captured
     // at startup means injecting a stale token days later (issue #2215).
     // Use buildIsolatedEnvWithFreshOAuth() for spawn-time injection.
+
+    // Local Bedrock support: inject any OTHER vars from ~/.claude-mem/.env
+    // (CLAUDE_CODE_USE_BEDROCK, AWS_REGION, AWS_PROFILE, etc.). The typed
+    // credential pass above already handled the auth keys; this picks up
+    // arbitrary provider config. CLAUDE_CODE_OAUTH_TOKEN is skipped here too
+    // because spawn-time injection via buildIsolatedEnvWithFreshOAuth() owns it.
+    const envFile = envFilePath();
+    if (existsSync(envFile)) {
+      try {
+        const allVars = parseEnvFile(readFileSync(envFile, 'utf-8'));
+        const TYPED_KEYS = new Set([
+          'ANTHROPIC_API_KEY',
+          'ANTHROPIC_BASE_URL',
+          'ANTHROPIC_AUTH_TOKEN',
+          'GEMINI_API_KEY',
+          'OPENROUTER_API_KEY',
+          'CLAUDE_CODE_OAUTH_TOKEN',
+        ]);
+        for (const [key, value] of Object.entries(allVars)) {
+          if (TYPED_KEYS.has(key)) continue;
+          if (value) isolatedEnv[key] = value;
+        }
+      } catch (error: unknown) {
+        logger.warn('ENV', 'Failed to load .env extras for subprocess env', { path: envFile }, error instanceof Error ? error : new Error(String(error)));
+      }
+    }
   }
 
   return isolatedEnv;
