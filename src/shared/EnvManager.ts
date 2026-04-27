@@ -224,34 +224,25 @@ export function buildIsolatedEnv(includeCredentials: boolean = true): Record<str
   // checks (which inevitably drift; see #2118 / #2126).
   isolatedEnv.CLAUDE_MEM_INTERNAL = '1';
 
-  // 3. Re-inject managed credentials from claude-mem's .env file
+  // 3. Inject ALL env vars from claude-mem's .env file (takes precedence over process.env)
+  // This covers managed credentials (ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.)
+  // as well as provider config (CLAUDE_CODE_USE_BEDROCK, AWS_REGION, AWS_PROFILE, etc.)
   if (includeCredentials) {
-    const credentials = loadClaudeMemEnv();
-
-    // Only add ANTHROPIC_API_KEY if explicitly configured in claude-mem
-    // If not configured, CLI billing will be used (via ANTHROPIC_AUTH_TOKEN passthrough)
-    if (credentials.ANTHROPIC_API_KEY) {
-      isolatedEnv.ANTHROPIC_API_KEY = credentials.ANTHROPIC_API_KEY;
-    }
-    // Override ANTHROPIC_BASE_URL from .env if configured
-    // This ensures the SDK subprocess uses a stable API endpoint instead of
-    // inheriting a dynamic local proxy port that may become stale
-    if (credentials.ANTHROPIC_BASE_URL) {
-      isolatedEnv.ANTHROPIC_BASE_URL = credentials.ANTHROPIC_BASE_URL;
-    }
-    // Note: GEMINI_API_KEY and OPENROUTER_API_KEY pass through from process.env,
-    // but claude-mem's .env takes precedence if configured
-    if (credentials.GEMINI_API_KEY) {
-      isolatedEnv.GEMINI_API_KEY = credentials.GEMINI_API_KEY;
-    }
-    if (credentials.OPENROUTER_API_KEY) {
-      isolatedEnv.OPENROUTER_API_KEY = credentials.OPENROUTER_API_KEY;
+    if (existsSync(ENV_FILE_PATH)) {
+      try {
+        const content = readFileSync(ENV_FILE_PATH, 'utf-8');
+        const envVars = parseEnvFile(content);
+        for (const [key, value] of Object.entries(envVars)) {
+          if (value) {
+            isolatedEnv[key] = value;
+          }
+        }
+      } catch (error: unknown) {
+        logger.warn('ENV', 'Failed to load .env for subprocess env', { path: ENV_FILE_PATH }, error instanceof Error ? error : new Error(String(error)));
+      }
     }
 
     // 4. Pass through Claude CLI's OAuth token if available (fallback for CLI subscription billing)
-    // When no ANTHROPIC_API_KEY is configured, the spawned CLI uses subscription billing
-    // which requires either ~/.claude/.credentials.json or CLAUDE_CODE_OAUTH_TOKEN.
-    // The worker inherits this token from the Claude Code session that started it.
     if (!isolatedEnv.ANTHROPIC_API_KEY && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
       isolatedEnv.CLAUDE_CODE_OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN;
     }
