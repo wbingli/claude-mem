@@ -329,7 +329,11 @@ export async function runUninstallCommand(): Promise<void> {
       const { uninstallOpenClawPlugin } = await import('../../services/integrations/OpenClawInstaller.js');
       return uninstallOpenClawPlugin();
     }},
-    { label: 'Codex CLI', fn: async () => {
+    { label: 'Codex CLI (native hooks)', fn: async () => {
+      const { uninstallCodexHooks } = await import('../../services/integrations/CodexHooksInstaller.js');
+      return uninstallCodexHooks();
+    }},
+    { label: 'Codex CLI (transcript watcher)', fn: async () => {
       const { uninstallCodexCli } = await import('../../services/integrations/CodexCliInstaller.js');
       return uninstallCodexCli();
     }},

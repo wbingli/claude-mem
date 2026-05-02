@@ -46,22 +46,30 @@ export const summarizeHandler: EventHandler = {
       logger.warn('HOOK', 'summarize: No sessionId provided, skipping');
       return { continue: true, suppressOutput: true, exitCode: HOOK_EXIT_CODES.SUCCESS };
     }
-    if (!transcriptPath) {
-      // No transcript available - skip summary gracefully (not an error)
-      logger.debug('HOOK', `No transcriptPath in Stop hook input for session ${sessionId} - skipping summary`);
-      return { continue: true, suppressOutput: true, exitCode: HOOK_EXIT_CODES.SUCCESS };
-    }
 
-    // Extract last assistant message from transcript (the work Claude did)
-    // Note: "user" messages in transcripts are mostly tool_results, not actual user input.
-    // The user's original request is already stored in user_prompts table.
+    // Codex CLI Stop hook delivers `last_assistant_message` directly in stdin —
+    // prefer it over parsing the transcript file (which Codex may not even
+    // expose to the hook process).
     let lastAssistantMessage = '';
-    try {
-      lastAssistantMessage = extractLastMessage(transcriptPath, 'assistant', true);
-      lastAssistantMessage = stripMemoryTagsFromPrompt(lastAssistantMessage);
-    } catch (err) {
-      logger.warn('HOOK', `Stop hook: failed to extract last assistant message for session ${sessionId}: ${err instanceof Error ? err.message : err}`);
-      return { continue: true, suppressOutput: true, exitCode: HOOK_EXIT_CODES.SUCCESS };
+    if (input.lastAssistantMessage && input.lastAssistantMessage.trim()) {
+      lastAssistantMessage = stripMemoryTagsFromPrompt(input.lastAssistantMessage);
+    } else {
+      if (!transcriptPath) {
+        // No transcript available - skip summary gracefully (not an error)
+        logger.debug('HOOK', `No transcriptPath in Stop hook input for session ${sessionId} - skipping summary`);
+        return { continue: true, suppressOutput: true, exitCode: HOOK_EXIT_CODES.SUCCESS };
+      }
+
+      // Extract last assistant message from transcript (the work Claude did)
+      // Note: "user" messages in transcripts are mostly tool_results, not actual user input.
+      // The user's original request is already stored in user_prompts table.
+      try {
+        lastAssistantMessage = extractLastMessage(transcriptPath, 'assistant', true);
+        lastAssistantMessage = stripMemoryTagsFromPrompt(lastAssistantMessage);
+      } catch (err) {
+        logger.warn('HOOK', `Stop hook: failed to extract last assistant message for session ${sessionId}: ${err instanceof Error ? err.message : err}`);
+        return { continue: true, suppressOutput: true, exitCode: HOOK_EXIT_CODES.SUCCESS };
+      }
     }
 
     // Skip summary if transcript has no assistant message (prevents repeated

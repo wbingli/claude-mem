@@ -16,6 +16,9 @@ export interface NormalizedHookInput {
   // Main session has both undefined. Discriminator for subagent context.
   agentId?: string;      // Claude Code subagent agent_id (undefined in main session)
   agentType?: string;    // Claude Code subagent agent_type (undefined in main session)
+  // Codex CLI Stop payload includes the last assistant message directly,
+  // bypassing the need to parse a transcript file.
+  lastAssistantMessage?: string;
 }
 
 export interface HookResult {

@@ -204,13 +204,34 @@ async function setupIDEs(selectedIDEs: string[]): Promise<string[]> {
       }
 
       case 'codex-cli': {
-        const { installCodexCli } = await import('../../services/integrations/CodexCliInstaller.js');
-        const codexResult = await installCodexCli();
-        if (codexResult === 0) {
-          log.success('Codex CLI: transcript watching configured.');
+        // Issue #2249: Codex now supports a full hook lifecycle (codex_hooks
+        // feature flag is stable). Native hooks eliminate AGENTS.md pollution
+        // and JSONL format coupling, so they are the default path. We also
+        // remove any prior transcript-watcher entry to prevent dual-capture.
+        const { installCodexHooks } = await import('../../services/integrations/CodexHooksInstaller.js');
+        const codexHooksResult = await installCodexHooks();
+
+        if (codexHooksResult === 0) {
+          // Hooks installed — purge stale transcript-watch entry so the
+          // legacy fallback doesn't keep writing AGENTS.md alongside hooks.
+          try {
+            const { uninstallCodexCli } = await import('../../services/integrations/CodexCliInstaller.js');
+            uninstallCodexCli();
+          } catch (cleanupError) {
+            // Best-effort: a missing/empty transcript-watch.json is fine.
+          }
+          log.success('Codex CLI: native hooks installed (no AGENTS.md writes).');
         } else {
-          log.error('Codex CLI: integration setup failed.');
-          failedIDEs.push(ideId);
+          // Codex hooks unavailable — fall back to transcript watching.
+          log.warn('Codex CLI: native hooks install failed, falling back to transcript watcher.');
+          const { installCodexCli } = await import('../../services/integrations/CodexCliInstaller.js');
+          const codexWatcherResult = await installCodexCli();
+          if (codexWatcherResult === 0) {
+            log.success('Codex CLI: transcript watching configured (legacy mode).');
+          } else {
+            log.error('Codex CLI: integration setup failed.');
+            failedIDEs.push(ideId);
+          }
         }
         break;
       }

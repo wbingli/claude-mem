@@ -49,11 +49,10 @@ describe('Hook Lifecycle - Event Handlers', () => {
 
 describe('Codex CLI Compatibility (#744)', () => {
   describe('getPlatformAdapter', () => {
-    it('should return rawAdapter for unknown platforms like codex', async () => {
-      const { getPlatformAdapter, rawAdapter } = await import('../src/cli/adapters/index.js');
-      // Should not throw for unknown platforms — falls back to rawAdapter
-      const adapter = getPlatformAdapter('codex');
-      expect(adapter).toBe(rawAdapter);
+    it('should return the dedicated codex adapter for "codex" / "codex-cli" (#2249)', async () => {
+      const { getPlatformAdapter, codexAdapter } = await import('../src/cli/adapters/index.js');
+      expect(getPlatformAdapter('codex')).toBe(codexAdapter);
+      expect(getPlatformAdapter('codex-cli')).toBe(codexAdapter);
     });
 
     it('should return rawAdapter for any unrecognized platform string', async () => {

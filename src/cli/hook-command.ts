@@ -78,7 +78,12 @@ async function executeHookPipeline(
   const result = await handler.execute(input);
   const output = adapter.formatOutput(result);
 
-  console.log(JSON.stringify(output));
+  // Adapter may signal "no output" by returning null/undefined — useful for
+  // platforms (e.g. Codex) where emitting an unrecognised JSON shape causes
+  // the host to label the hook as "Failed".
+  if (output !== null && output !== undefined) {
+    console.log(JSON.stringify(output));
+  }
   const exitCode = result.exitCode ?? HOOK_EXIT_CODES.SUCCESS;
   if (!options.skipExit) {
     process.exit(exitCode);
