@@ -661,19 +661,24 @@ export async function detectClaudeCode(): Promise<boolean> {
   return false;
 }
 
+function parseTarget(args: string[]): CursorInstallTarget {
+  const idx = args.indexOf('--target');
+  if (idx !== -1 && args[idx + 1]) return args[idx + 1] as CursorInstallTarget;
+  const positional = args.find(a => !a.startsWith('-'));
+  return (positional || 'project') as CursorInstallTarget;
+}
+
 /**
  * Handle cursor subcommand for hooks installation
  */
 export async function handleCursorCommand(subcommand: string, args: string[]): Promise<number> {
   switch (subcommand) {
     case 'install': {
-      const target = (args[0] || 'project') as CursorInstallTarget;
-      return installCursorHooks(target);
+      return installCursorHooks(parseTarget(args));
     }
 
     case 'uninstall': {
-      const target = (args[0] || 'project') as CursorInstallTarget;
-      return uninstallCursorHooks(target);
+      return uninstallCursorHooks(parseTarget(args));
     }
 
     case 'status': {
