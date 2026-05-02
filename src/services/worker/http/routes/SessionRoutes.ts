@@ -23,6 +23,7 @@ import { SessionCompletionHandler } from '../../session/SessionCompletionHandler
 import { getUptimeSeconds } from '../../../../shared/uptime.js';
 
 const MAX_USER_PROMPT_BYTES = 256 * 1024;
+const DUPLICATE_PROMPT_WINDOW_MS = 2_000;
 
 export class SessionRoutes extends BaseRouteHandler {
   constructor(
@@ -357,6 +358,32 @@ export class SessionRoutes extends BaseRouteHandler {
       sessionId: sessionDbId
     });
 
+    // Step 2: Strip privacy tags from prompt
+    const cleanedPrompt = stripMemoryTagsFromPrompt(prompt);
+
+    // Step 3: Treat rapid duplicate hook invocations as idempotent. Cursor can
+    // run both user-level and project-level hooks when both are installed.
+    const latestPrompt = store.getLatestUserPrompt(contentSessionId);
+    if (
+      latestPrompt &&
+      latestPrompt.prompt_text === cleanedPrompt &&
+      Date.now() - latestPrompt.created_at_epoch <= DUPLICATE_PROMPT_WINDOW_MS
+    ) {
+      const contextInjected = this.sessionManager.getSession(sessionDbId) !== undefined;
+      logger.info('SESSION', 'Duplicate prompt ignored', {
+        sessionId: sessionDbId,
+        promptNumber: latestPrompt.prompt_number
+      });
+      res.json({
+        sessionDbId,
+        promptNumber: latestPrompt.prompt_number,
+        skipped: false,
+        contextInjected
+      });
+      return;
+    }
+
+    // Step 4: Get next prompt number from user_prompts count
     const currentCount = store.getPromptNumberFromUserPrompts(contentSessionId);
     const promptNumber = currentCount + 1;
 
@@ -367,8 +394,7 @@ export class SessionRoutes extends BaseRouteHandler {
       logger.debug('HTTP', `[ALIGNMENT] New Session | contentSessionId=${contentSessionId} | prompt#=${promptNumber} | memorySessionId will be captured on first SDK response`);
     }
 
-    const cleanedPrompt = stripMemoryTagsFromPrompt(prompt);
-
+    // Step 5: Check if prompt is entirely private
     if (!cleanedPrompt || cleanedPrompt.trim() === '') {
       logger.debug('HOOK', 'Session init - prompt entirely private', {
         sessionId: sessionDbId,
@@ -385,8 +411,11 @@ export class SessionRoutes extends BaseRouteHandler {
       return;
     }
 
+    // Step 6: Save cleaned user prompt
     store.saveUserPrompt(contentSessionId, promptNumber, cleanedPrompt);
 
+    // Step 7: Check if SDK agent is already running for this session (#1079)
+    // If contextInjected is true, the hook should skip re-initializing the SDK agent
     const contextInjected = this.sessionManager.getSession(sessionDbId) !== undefined;
 
     logger.debug('SESSION', 'User prompt saved', {
