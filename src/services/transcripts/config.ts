@@ -45,6 +45,14 @@ const CODEX_SAMPLE_SCHEMA: TranscriptSchema = {
       }
     },
     {
+      name: 'final-assistant-message',
+      match: { path: 'payload.type', equals: 'task_complete' },
+      action: 'assistant_message',
+      fields: {
+        message: 'payload.last_agent_message'
+      }
+    },
+    {
       name: 'tool-use',
       match: { path: 'payload.type', in: ['function_call', 'custom_tool_call', 'web_search_call', 'exec_command'] },
       action: 'tool_use',
@@ -78,7 +86,7 @@ const CODEX_SAMPLE_SCHEMA: TranscriptSchema = {
     },
     {
       name: 'session-end',
-      match: { path: 'payload.type', in: ['turn_aborted', 'turn_completed'] },
+      match: { path: 'payload.type', in: ['turn_aborted', 'turn_completed', 'task_complete'] },
       action: 'session_end'
     }
   ]
