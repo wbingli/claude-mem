@@ -5,6 +5,7 @@ import type { DatabaseManager } from '../DatabaseManager.js';
 import type { SessionEventBroadcaster } from '../events/SessionEventBroadcaster.js';
 import type { ParsedSummary } from '../../../sdk/parser.js';
 import { stripMemoryTagsFromJson } from '../../../utils/tag-stripping.js';
+import { buildSanitizerSettings, sanitizeToolInput, sanitizeToolResponse } from '../../../utils/tool-payload-sanitizer.js';
 import { isProjectExcluded } from '../../../utils/project-filter.js';
 import { SettingsDefaultsManager } from '../../../shared/SettingsDefaultsManager.js';
 import { USER_SETTINGS_PATH } from '../../../shared/paths.js';
@@ -151,11 +152,21 @@ export async function ingestObservation(payload: ObservationPayload): Promise<In
     return { ok: true, status: 'skipped', reason: 'private' };
   }
 
-  const cleanedToolInput = payload.toolInput !== undefined
-    ? stripMemoryTagsFromJson(JSON.stringify(payload.toolInput))
+  // Sanitize before serializing: strip base64 images, replace bulk Edit/Write
+  // content with size metadata, drop response for echo-style tools, and apply
+  // a final byte cap. Keeps observer prompts small and focused on signal.
+  const sanitizerSettings = buildSanitizerSettings(settings);
+  const sanitizedInput = payload.toolInput !== undefined
+    ? sanitizeToolInput(payload.toolName, payload.toolInput, sanitizerSettings)
+    : undefined;
+  const sanitizedResponse = payload.toolResponse !== undefined
+    ? sanitizeToolResponse(payload.toolName, payload.toolResponse, sanitizerSettings)
+    : undefined;
+  const cleanedToolInput = sanitizedInput !== undefined
+    ? stripMemoryTagsFromJson(JSON.stringify(sanitizedInput))
     : '{}';
-  const cleanedToolResponse = payload.toolResponse !== undefined
-    ? stripMemoryTagsFromJson(JSON.stringify(payload.toolResponse))
+  const cleanedToolResponse = sanitizedResponse !== undefined
+    ? stripMemoryTagsFromJson(JSON.stringify(sanitizedResponse))
     : '{}';
 
   await sessionManager.queueObservation(sessionDbId, {

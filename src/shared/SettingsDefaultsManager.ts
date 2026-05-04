@@ -9,8 +9,13 @@ export interface SettingsDefaults {
   CLAUDE_MEM_WORKER_PORT: string;
   CLAUDE_MEM_WORKER_HOST: string;
   CLAUDE_MEM_SKIP_TOOLS: string;
-  CLAUDE_MEM_PROVIDER: string;  
-  CLAUDE_MEM_CLAUDE_AUTH_METHOD: string;  
+  // Tool Payload Sanitization (controls how tool_input/tool_response are shaped before
+  // they reach the observer LLM — prevents base64 images and large diffs from bloating prompts)
+  CLAUDE_MEM_TRUNCATE_INPUT_TOOLS: string;       // Comma list — replace bulk fields with size metadata
+  CLAUDE_MEM_DROP_RESPONSE_TOOLS: string;        // Comma list — omit tool_response entirely
+  CLAUDE_MEM_TOOL_PAYLOAD_MAX_BYTES: string;     // Final byte cap applied after sanitization
+  CLAUDE_MEM_PROVIDER: string;
+  CLAUDE_MEM_CLAUDE_AUTH_METHOD: string;
   CLAUDE_MEM_GEMINI_API_KEY: string;
   CLAUDE_MEM_GEMINI_MODEL: string;  
   CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED: string;  
@@ -89,6 +94,9 @@ export class SettingsDefaultsManager {
     CLAUDE_MEM_WORKER_PORT: String(37700 + ((process.getuid?.() ?? 77) % 100)),
     CLAUDE_MEM_WORKER_HOST: '127.0.0.1',
     CLAUDE_MEM_SKIP_TOOLS: 'ListMcpResourcesTool,SlashCommand,Skill,TodoWrite,AskUserQuestion',
+    CLAUDE_MEM_TRUNCATE_INPUT_TOOLS: 'Edit,Write,MultiEdit,NotebookEdit',
+    CLAUDE_MEM_DROP_RESPONSE_TOOLS: 'Read,Write,Edit,NotebookEdit,Glob,LS,WebFetch',
+    CLAUDE_MEM_TOOL_PAYLOAD_MAX_BYTES: '512',
     CLAUDE_MEM_PROVIDER: 'claude',  // Default to Claude
     CLAUDE_MEM_CLAUDE_AUTH_METHOD: 'subscription',  // Default to logged-in Claude SDK auth (not API key)
     CLAUDE_MEM_GEMINI_API_KEY: '',  // Empty by default, can be set via UI or env
